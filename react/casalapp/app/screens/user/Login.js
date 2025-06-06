@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,26 +10,63 @@ import {
   Alert
 } from 'react-native';
 import globalStyles from '../../styles/GlobalStyles';
-import { auth } from '../../services/firebase';
+import { auth, db } from '../../services/firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-
+import { doc, getDoc } from 'firebase/firestore';
 
 const Login = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
   const handleLogin = () => {
-
     if (!email || !password) {
       Alert.alert('Erro', 'Preencha todos os campos.');
       return;
     }
 
     signInWithEmailAndPassword(auth, email, password)
-      .then((userCredential) => {
+      .then(async (userCredential) => {
         const user = userCredential.user;
-        Alert.alert('Login realizado com sucesso!', `Bem-vindo de volta, ${user.email}`);
-        // aqui você pode navegar para outra tela, ex: navigation.navigate('Home')
+        
+        // Verifica se o usuário tem uma casa associada
+        const userDocRef = doc(db, 'users', user.uid);
+        const userDoc = await getDoc(userDocRef);
+        
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          
+          if (userData.houseId) {
+            // Verifica se a casa existe
+            const houseDocRef = doc(db, 'houses', userData.houseId);
+            const houseDoc = await getDoc(houseDocRef);
+            
+            if (houseDoc.exists()) {
+              // Redireciona para o Dashboard
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'Dashboard' }],
+              });
+            } else {
+              // Se casa não existe mais vai redirecionar para seleção de casa
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'HouseSelection' }],
+              });
+            }
+          } else {
+            // Se suário não tem casa associada vai redirecionar para seleção de casa
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'HouseSelection' }],
+            });
+          }
+        } else {
+          // Documento do usuário não existe vai redirecionar para seleção de casa
+          navigation.reset({
+            index: 0,
+            routes: [{ name: 'HouseSelection' }],
+          });
+        }
       })
       .catch((error) => {
         let message = 'Erro ao fazer login.';
@@ -40,7 +77,7 @@ const Login = ({ navigation }) => {
         } else if (error.code === 'auth/invalid-email') {
           message = 'Email inválido.';
         }
-        Alert.alert('Erro',message);
+        Alert.alert('Erro', message);
       });
   };
 
@@ -67,7 +104,6 @@ const Login = ({ navigation }) => {
               style={{ flex: 1, fontSize: 16 }}
             />
           </View>
-
 
           <TouchableOpacity>
             <Text style={{ color: '#006ffd', fontWeight: '600', fontSize: 14 }}>Esqueceu sua senha?</Text>
